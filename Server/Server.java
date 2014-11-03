@@ -88,10 +88,11 @@ public class Server implements Runnable{
 							 SocketChannel channel = (SocketChannel)key.channel();
 							 
 							 buffer.clear();
-							 
+							 // number of bytes for read
 							 int bytes;
-							 
+							 // gets bytes from channel read
 							 while ( (bytes = channel.read(buffer)) != 0){
+								// sets bytes to byte variable with greater scope
 								 bytesRead = bytes;
 								 System.out.println(Integer.toString(bytesRead));
 								 if(bytesRead == -1){
@@ -101,7 +102,7 @@ public class Server implements Runnable{
 							 
 							 
 							 System.out.println("Received: " + new String(buffer.array()) );
-
+ 							// sets channel to Operation_Write state
 							 channel.register(selector, SelectionKey.OP_WRITE);
 							 /*if(buffer.remaining() != 0){
 								 processor.addData(buffer.array());

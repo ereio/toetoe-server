@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -32,17 +33,21 @@ public class ToeServer implements Runnable {
 	private Selector selector;
 	private ServerSocketChannel socketChannel;
 	private ByteBuffer mainBuffer = ByteBuffer.allocate(1024);
+	private int mainBufSize;
+	private boolean DEBUG_first = true;
 	
 	private List<ChangeRequest> pendingChanges = new LinkedList<ChangeRequest>();
 	private Map<SocketChannel, List> pendingData = new HashMap<SocketChannel, List>();
 	
 	public ArrayList<Socket>clients = new ArrayList<Socket>();
+	public Map<String, Socket>clientMap = new HashMap<String, Socket>();
 	
 	public ToeServer(ToeProcessor tpro) throws IOException{
 			host = InetAddress.getByName("0.0.0.0");
 			port = 40052;
 			selector = initSelector();
 			tProcessor = tpro;
+			
 	}
 	
 	public void send(SocketChannel sock, byte[] d){
@@ -50,7 +55,7 @@ public class ToeServer implements Runnable {
 		synchronized (pendingChanges) {
 			pendingChanges.add(new ChangeRequest(sock, ChangeRequest.CHANGEOPS, SelectionKey.OP_WRITE));
 			
-			// Handling Changes Data
+			// Handling pending Data sent to the server
 			synchronized(pendingData) {
 				List<ByteBuffer> queue = pendingData.get(sock);
 				if (queue == null){
@@ -67,8 +72,11 @@ public class ToeServer implements Runnable {
 	@Override
 	public void run() {
 		try{
+			
+			
 			// MAIN SERVER LOOP
 			while(true){
+				// Queues pending changes to the channels requesting io
 				synchronized(pendingChanges) {
 					Iterator changes = pendingChanges.iterator();
 					while (changes.hasNext()) {
@@ -100,9 +108,14 @@ public class ToeServer implements Runnable {
 						accept(curKey);
 					} else if(curKey.isReadable()){
 						read(curKey);
+						DEBUG_setKeyToWrite(curKey);
+						
 					} else if(curKey.isWritable()){
-						write(curKey);
+						//write(curKey);
+						DEBUG_broadCastReads(curKey, mainBuffer, mainBufSize);
+						
 					}
+					else{}
 					
 				} // END KEY LOOP
 			} // END SERVER LOOP
@@ -112,6 +125,7 @@ public class ToeServer implements Runnable {
 		}
 	} // END RUN LOOP
 	
+	// Creates selector for the socket
 	private Selector initSelector() throws IOException{
 		Selector socketSelector = SelectorProvider.provider().openSelector();
 		socketChannel = ServerSocketChannel.open();
@@ -149,6 +163,9 @@ public class ToeServer implements Runnable {
 		// Test Buffer Read, Connection may have closed
 		try{
 			bytes = sChannel.read(mainBuffer);
+			mainBufSize = bytes;
+			DEBUG_readBytes(mainBuffer, bytes);
+			
 		} catch (IOException e){
 			k.cancel();
 			try {
@@ -181,7 +198,10 @@ public class ToeServer implements Runnable {
 			// Handles all pending data being sent 
 			while(!queue.isEmpty()){
 				ByteBuffer subBuf = (ByteBuffer) queue.get(0);
+				System.out.println(subBuf.array().toString());
+				
 				try {
+					// Actually writes the buffer for the outgoing data to channel
 					sChannel.write(subBuf);
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
@@ -197,6 +217,84 @@ public class ToeServer implements Runnable {
 			}
 			
 		}
+		
+	}
+	
+	private void DEBUG_readBytes(ByteBuffer bb, int bSize){
+		ByteBuffer byteMessage = parseByteBuffer(bb, bSize);
+		if(byteMessage != null){
+		byte[] bArray = byteMessage.array();
+		
+		// Creates a String from the byte array created from a bytebuffer
+		String message = new String(bArray);
+		
+		System.out.println("ORGINAL BB" + bb);
+		System.out.println("TEMP BB:" + byteMessage);
+		System.out.println("bArray to String: " + message);
+		System.out.println("MainBuffer size: " + bSize);
+		System.out.println("byteMessage size: " + byteMessage.capacity());
+		}
+	}
+	
+	private ByteBuffer parseByteBuffer(ByteBuffer bb, int bSize){
+		if( bSize != -1){
+		ByteBuffer temp = ByteBuffer.allocate(bSize);
+		
+		bb.rewind();
+		for(int b = 0; b < bSize; b++){
+			temp.put(bb.get());
+			}
+		
+		return temp;
+		}
+		else { return null; }
+	}
+	
+	private void DEBUG_setKeyToWrite(SelectionKey key){
+		SocketChannel sChannel = (SocketChannel) key.channel();
+		try {
+			sChannel.register(selector, SelectionKey.OP_WRITE);
+		} catch (ClosedChannelException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	private void DEBUG_broadCastReads(SelectionKey key, ByteBuffer buffer, int bytesRead){
+		 SocketChannel channel = (SocketChannel)key.channel();
+		 final byte[] WELCOME = "Welcome From The Server!".getBytes(Charset.forName("UTF-8"));;
+		 int bytes;
+		 DEBUG_first = false;
+		 ByteBuffer temp = ByteBuffer.allocate(bytesRead);
+		 
+		 buffer.rewind();
+		 
+		 for(int b = 0; b < bytesRead; b++){
+			 temp.put(buffer.get());
+		 }
+		 try {
+		 if(DEBUG_first){
+			ByteBuffer welcomeTemp = (ByteBuffer.wrap(WELCOME));
+			welcomeTemp.clear();
+			bytes = channel.write(welcomeTemp);
+			 System.out.println(Integer.toString(bytes) + new String(welcomeTemp.array()));
+			 DEBUG_first = false;
+		 }else{
+			 for(int client = 0; client < clients.size(); client++){
+				 
+				 SocketChannel c = clients.get(client).getChannel();
+				 temp.rewind();
+				 int bytesWritten = 0;
+				 if( c.isConnected() == true){
+				 bytesWritten = c.write(temp);
+				 }
+				 System.out.println("Sent: " + Integer.toString(bytesWritten) + " to " + c.socket().getInetAddress());
+			 }
+		 }
+		 channel.register(selector, SelectionKey.OP_READ);
+		 } catch (IOException e) {
+			 e.printStackTrace();
+		 }
 		
 	}
 }

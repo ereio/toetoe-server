@@ -35,7 +35,7 @@ public class Server implements Runnable{
         	try{        		
         		socketChannel = ServerSocketChannel.open();
         		socketChannel.configureBlocking(false);
-        		socketChannel.socket().bind( new InetSocketAddress("0.0.0.0", 2768) );
+        		socketChannel.socket().bind( new InetSocketAddress("0.0.0.0", 40052) );
         		selector = SelectorProvider.provider().openSelector();
         		socketChannel.register(selector, SelectionKey.OP_ACCEPT);
         		

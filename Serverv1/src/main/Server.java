@@ -24,7 +24,7 @@ public class Server implements Runnable{
     	
     	ByteBuffer buffer = ByteBuffer.allocate(124);
     	
-    	private final byte[] WELCOME = "Welcome From The Server!".getBytes(Charset.forName("UTF-8"));;
+    	private final byte[] WELCOME = "MESSAGE:Welcome From The Server!".getBytes(Charset.forName("UTF-8"));;
     	
     	private boolean first = true;
     	
@@ -97,6 +97,7 @@ public class Server implements Runnable{
 								 bytesRead = bytes;
 								 System.out.println(Integer.toString(bytesRead));
 								 if(bytesRead == -1){
+									 channel.close();
 									 System.out.println("Error Has Occured In Reading");
 								 }
 							 }

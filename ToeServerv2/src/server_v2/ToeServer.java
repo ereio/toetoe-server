@@ -144,9 +144,9 @@ public class ToeServer implements Runnable {
 		try{
 			
 			SocketChannel sChannel = ssChannel.accept();
-			clients.add(sChannel.socket());
 			sChannel.configureBlocking(false);
 			sChannel.register(selector, SelectionKey.OP_READ);
+			clients.add(sChannel.socket());
 			
 		} catch (IOException e){
 			e.printStackTrace();
@@ -283,7 +283,7 @@ public class ToeServer implements Runnable {
 			 for(int client = 0; client < clients.size(); client++){
 				 
 				 SocketChannel c = clients.get(client).getChannel();
-				 temp.rewind();
+				 temp.clear();
 				 int bytesWritten = 0;
 				 if( c.isConnected() == true){
 				 bytesWritten = c.write(temp);
